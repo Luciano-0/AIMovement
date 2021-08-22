@@ -13,22 +13,30 @@ public class MovingEntity : MonoBehaviour
 
     public Vector3 Force { get; private set; }
     public Vector3 Velocity { get; private set; }
+    public Vector3 WanderTarget { get; set; }
 
     public void AddForce(Vector3 force)
     {
         Force += force;
         if (Force.sqrMagnitude > maxForce * maxForce)
-        {
             Force = Force.normalized * maxForce;
-        }
     }
 
-    void Start()
+    public void SetSpeed(Vector3 velocity)
     {
+        if (velocity.sqrMagnitude > maxSpeed * maxSpeed)
+            Velocity = velocity.normalized * maxSpeed;
+        else Velocity = velocity;
+    }
+
+    public void Stop()
+    {
+        Force = Vector3.zero;
+        Velocity = Vector3.zero;
     }
 
 
-    void Update()
+    public void Update()
     {
         if (mass == 0) mass = 1;
         Velocity = Force / mass * Time.deltaTime + Velocity;
@@ -43,7 +51,7 @@ public class MovingEntity : MonoBehaviour
         var vn = transform.forward;
         if (fn == default) return;
         var angle = Vector3.Angle(fn, vn);
-        if (angle < 0.1) return;
+        if (angle < 5) return;
         var axis = Vector3.Cross(fn, vn);
         transform.Rotate(axis, -maxTurnRate * Time.deltaTime, Space.World);
         transform.Rotate(transform.forward * rotationSpeed * Time.deltaTime, Space.World);
