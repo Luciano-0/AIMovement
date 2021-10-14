@@ -53,11 +53,11 @@
   </PropertyGroup>
   <ItemGroup>
      <Compile Include="Assets\Scripts\Behaviour.cs" />
+     <Compile Include="Assets\Scripts\Block.cs" />
      <Compile Include="Assets\Scripts\Controller\BoidsController.cs" />
      <Compile Include="Assets\Scripts\Controller\CommonController.cs" />
      <Compile Include="Assets\Scripts\Controller\Controller.cs" />
      <Compile Include="Assets\Scripts\MovingEntity.cs" />
-     <Compile Include="Assets\Scripts\Block.cs" />
  <Reference Include="UnityEngine">
  <HintPath>/Applications/Unity/Hub/Editor/2020.3.11f1c1/Unity.app/Contents/Managed/UnityEngine/UnityEngine.dll</HintPath>
  </Reference>

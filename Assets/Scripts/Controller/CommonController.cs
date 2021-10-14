@@ -13,8 +13,10 @@ public enum MoveType
     Flee,
     Arrive,
     Pursuit,
+    Evade,
+    OffsetPursuit,
+    Interpose,
     Wander,
-    Hide,
 }
 
 public class CommonController : Controller
@@ -28,8 +30,9 @@ public class CommonController : Controller
     public float maxBlockRadius = 15;
 
     [Header("Flee")] public float keepDistance = 5;
-    [Header("Arrive")] public float slowDownTime = 3;
+    [Header("Arrive")] public float slowDownDis = 4;
     [Header("Pursuit")] public float pursuitDistance = 1;
+    [Header("OffsetPursuit")] public List<Vector3> pursuitOffset;
     [Header("Wander")] public float wanderRadius = 10;
     public float wanderDistance = 5;
     public float wanderJitter = 3;
@@ -61,7 +64,7 @@ public class CommonController : Controller
             case MoveType.Arrive:
                 foreach (var entity in entityList)
                 {
-                    entity.AddForce(entity.Arrive(GetTarget(), slowDownTime));
+                    entity.AddForce(entity.Arrive(GetTarget(), slowDownDis));
                 }
 
                 break;
@@ -71,9 +74,49 @@ public class CommonController : Controller
                 else
                 {
                     var target = entityList[0];
-                    target.AddForce(target.Arrive(GetTarget(), slowDownTime));
+                    target.AddForce(target.Arrive(GetTarget(), slowDownDis));
                     for (int i = 1; i < entityList.Count; i++)
                         entityList[i].AddForce(entityList[i].Pursuit(target, pursuitDistance));
+                }
+
+                break;
+            case MoveType.Evade:
+                if (entityList.Count < 2)
+                    Debug.LogError("至少添加两个单位！");
+                else
+                {
+                    var target = entityList[0];
+                    target.AddForce(target.Arrive(GetTarget(), slowDownDis));
+                    for (int i = 1; i < entityList.Count; i++)
+                        entityList[i].AddForce(entityList[i].Evade(target, keepDistance));
+                }
+
+                break;
+            case MoveType.OffsetPursuit:
+                if (entityList.Count < 2)
+                    Debug.LogError("至少添加两个单位！");
+                else if (entityList.Count - 1 > pursuitOffset.Count)
+                    Debug.LogError("缺少offset配置！");
+                else
+                {
+                    var target = entityList[0];
+                    target.AddForce(target.Arrive(GetTarget(), slowDownDis));
+                    for (int i = 1; i < entityList.Count; i++)
+                        entityList[i].AddForce(entityList[i].OffsetPursuit(target, pursuitOffset[i - 1]));
+                }
+
+                break;
+            case MoveType.Interpose:
+                if (entityList.Count < 3)
+                    Debug.LogError("至少添加三个单位！");
+                else
+                {
+                    var targetA = entityList[0];
+                    var targetB = entityList[1];
+                    targetA.AddForce(targetA.Wander(wanderRadius, wanderDistance, wanderJitter, true));
+                    targetB.AddForce(targetB.Wander(wanderRadius, wanderDistance, wanderJitter, true));
+                    for (var i = 2; i < entityList.Count; i++)
+                        entityList[i].AddForce(entityList[i].Interpose(targetA, targetB));
                 }
 
                 break;
@@ -109,6 +152,6 @@ public class CommonController : Controller
         var b = block.GetComponent<Block>();
         blockList.Add(b);
         b.radius = Random.Range(minBlockRadius, maxBlockRadius);
-        b.transform.localScale = new Vector3(b.radius,6,b.radius);
+        b.transform.localScale = new Vector3(b.radius, 6, b.radius);
     }
 }

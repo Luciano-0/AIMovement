@@ -1,6 +1,3 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class MovingEntity : MonoBehaviour
@@ -55,6 +52,7 @@ public class MovingEntity : MonoBehaviour
         var axis = Vector3.Cross(fn, vn);
         transform.Rotate(axis, -maxTurnRate * Time.deltaTime, Space.World);
         transform.Rotate(transform.forward * rotationSpeed * Time.deltaTime, Space.World);
+        // transform.forward = Velocity;
     }
 
     private void OnDrawGizmosSelected()

@@ -1,17 +1,15 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Linq;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public static class Behaviour
+public static class EntityBehaviour
 {
     // 靠近
     public static Vector3 Seek(this MovingEntity entity, Vector3 target)
     {
-        var needVelocity = (target - entity.transform.position).normalized * entity.maxSpeed;
+        var dis = target - entity.transform.position;
+        var needVelocity = dis.normalized * entity.maxSpeed;
         var deltaVelocity = needVelocity - entity.Velocity;
         return deltaVelocity.normalized * entity.maxForce;
     }
@@ -25,7 +23,7 @@ public static class Behaviour
             if (entity.Velocity.sqrMagnitude < 0.1)
             {
                 entity.Stop();
-                return default;
+                return Vector3.zero;
             }
 
             return entity.Velocity.normalized * -1;
@@ -37,21 +35,37 @@ public static class Behaviour
     }
 
     // 到达
-    public static Vector3 Arrive(this MovingEntity entity, Vector3 target, float time = 4)
+    public static Vector3 Arrive(this MovingEntity entity, Vector3 target, float slowDownDis = 10)
     {
         var toTarget = target - entity.transform.position;
         var dis = toTarget.magnitude;
-        if (dis > 0)
+        if (dis > slowDownDis)
         {
-            var needSpeed = Math.Min(dis / time, entity.maxSpeed);
-            var needVelocity = toTarget.normalized * needSpeed;
-            return (needVelocity - entity.Velocity).normalized;
+            return entity.Seek(target);
         }
 
+        if (dis > 0.1)
+        {
+            var needSpeed = (float)Math.Sqrt(2 * entity.maxForce / entity.mass * dis);
+            var needVelocity = toTarget.normalized * needSpeed;
+            return (needVelocity - entity.Velocity).normalized * entity.maxForce;
+        }
+
+        entity.Stop();
         return Vector3.zero;
     }
 
-    // 追逐
+    // 逃避
+    public static Vector3 Evade(this MovingEntity entity, MovingEntity target, float keepDistance)
+    {
+        var dir = entity.transform.position - target.transform.position;
+        var tarSpeed = target.Velocity.magnitude;
+        var lookAheadDis = dir.magnitude * tarSpeed / entity.maxSpeed;
+        var tarPos = target.transform.position + target.Velocity.normalized * lookAheadDis;
+        return entity.Flee(tarPos, keepDistance);
+    }
+
+    //追逐
     public static Vector3 Pursuit(this MovingEntity entity, MovingEntity target, float keepDistance = 0.1f)
     {
         var dir = entity.transform.position - target.transform.position;
@@ -59,7 +73,7 @@ public static class Behaviour
         if (dir.sqrMagnitude <= keepDistance * keepDistance)
         {
             entity.Stop();
-            return default;
+            return Vector3.zero;
         }
 
         //当目标朝向自己时，直接向目标当前位置移动
@@ -70,12 +84,34 @@ public static class Behaviour
 
         //当目标在向其他方向移动时，需要预判目标一段时间后的位置。
         var tarSpeed = target.Velocity.magnitude;
-        var lookAheadDis = dir.magnitude * tarSpeed * tarSpeed / (entity.maxSpeed * entity.maxSpeed);
+        var lookAheadDis = dir.magnitude * tarSpeed / entity.maxSpeed;
         var tarPos = target.transform.position + target.Velocity.normalized * lookAheadDis;
-        return Seek(entity, tarPos);
+        return entity.Seek(tarPos);
     }
 
-    // 逃避
+    //带偏移的追逐
+    public static Vector3 OffsetPursuit(this MovingEntity entity, MovingEntity target, Vector3 offset)
+    {
+        var dir = entity.transform.position - target.transform.position;
+        var tarSpeed = target.Velocity.magnitude;
+        var lookAheadDis = dir.magnitude * tarSpeed / entity.maxSpeed;
+        var tarPos = target.transform.position + target.Velocity.normalized * lookAheadDis +
+                     target.transform.TransformVector(offset);
+        return entity.Arrive(tarPos, 10);
+    }
+
+    public static Vector3 Interpose(this MovingEntity entity, MovingEntity targetA, MovingEntity targetB)
+    {
+        var targetAPos = targetA.transform.position;
+        var targetBPos = targetB.transform.position;
+        var centerNow = (targetAPos + targetBPos) / 2;
+        var time = (entity.transform.position - centerNow).magnitude / entity.maxSpeed;
+        var targetAPosPre = targetAPos + targetA.Velocity * time;
+        var targetBPosPre = targetBPos + targetB.Velocity * time;
+        return entity.Arrive((targetAPosPre + targetBPosPre) / 2);
+    }
+
+    // 徘徊
     public static Vector3 Wander(this MovingEntity entity, float wanderRadius, float wanderDistance, float wanderJitter,
         bool limit = true)
     {
@@ -95,28 +131,33 @@ public static class Behaviour
 
     public static Vector3 Separate(this MovingEntity entity, List<MovingEntity> teammate, float desiredSeparation = 2)
     {
-        var force = new Vector3();
+        var force = Vector3.zero;
+        Vector3 dir;
+        float dis;
         var count = 0;
-        foreach (var mv in teammate.Where(mv => mv != entity))
+        foreach (var mv in teammate)
         {
-            var dis = entity.transform.position - mv.transform.position;
-            if (dis.sqrMagnitude <= desiredSeparation * desiredSeparation)
+            if (mv == entity) continue;
+            dir = entity.transform.position - mv.transform.position;
+            dis = dir.magnitude > 0.1f ? dir.magnitude : 0.1f;
+            if (dis <= desiredSeparation)
             {
-                force += dis.normalized / dis.magnitude;
+                force += dir.normalized / dis;
                 count++;
             }
         }
 
-        if (count <= 0) return Vector3.zero;
+        if (count == 0) return Vector3.zero;
         return force.normalized * entity.maxForce;
     }
 
-    public static Vector3 Aline(this MovingEntity entity, List<MovingEntity> teammate, float neighborDist = 10)
+    public static Vector3 Align(this MovingEntity entity, List<MovingEntity> teammate, float neighborDist = 10)
     {
-        var needVelocity = new Vector3();
+        var needVelocity = Vector3.zero;
         var count = 0;
-        foreach (var mv in teammate.Where(mv => mv != entity))
+        foreach (var mv in teammate)
         {
+            if (mv == entity) continue;
             if ((entity.transform.position - mv.transform.position).sqrMagnitude <= neighborDist * neighborDist)
             {
                 needVelocity += mv.Velocity;
@@ -126,16 +167,16 @@ public static class Behaviour
 
         if (count <= 0) return Vector3.zero;
         needVelocity /= count;
-        var deltaVelocity = needVelocity - entity.Velocity;
-        return deltaVelocity.normalized * entity.maxForce;
+        return (needVelocity - entity.Velocity).normalized * entity.maxForce;
     }
 
     public static Vector3 Cohesion(this MovingEntity entity, List<MovingEntity> teammate, float neighborDist = 10)
     {
-        var center = new Vector3();
+        var center = Vector3.zero;
         var count = 0;
-        foreach (var mv in teammate.Where(mv => mv != entity))
+        foreach (var mv in teammate)
         {
+            if (mv == entity) continue;
             if ((entity.transform.position - mv.transform.position).sqrMagnitude <= neighborDist * neighborDist)
             {
                 center += mv.Velocity;
@@ -145,6 +186,6 @@ public static class Behaviour
 
         if (count <= 0) return Vector3.zero;
         center /= count;
-        return (center - entity.transform.position).normalized * entity.maxForce;
+        return entity.Seek(center);
     }
 }
